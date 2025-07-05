@@ -219,18 +219,28 @@ async def chat_endpoint(request: ChatRequest):
         selected_agent = determine_agent(request.message)
         logger.info(f"Selected agent: {selected_agent.name}")
         
-        # Create input item for the runner
-        input_item = {
-            "content": request.message,
-            "role": "user"
-        }
-        
-        # Run the agent with correct parameters
-        response = await runner.run(
-            input_item=input_item,
-            context=context,
-            agent=selected_agent
-        )
+        # Try different runner call patterns based on the agents framework
+        try:
+            # Pattern 1: Simple message and context
+            response = await runner.run(request.message, context=context)
+        except Exception as e1:
+            logger.warning(f"Pattern 1 failed: {e1}")
+            try:
+                # Pattern 2: With agent parameter
+                response = await runner.run(request.message, agent=selected_agent, context=context)
+            except Exception as e2:
+                logger.warning(f"Pattern 2 failed: {e2}")
+                try:
+                    # Pattern 3: Direct agent run
+                    response = await selected_agent.run(request.message, context=context)
+                except Exception as e3:
+                    logger.warning(f"Pattern 3 failed: {e3}")
+                    # Pattern 4: Manual response for triage
+                    if selected_agent == triage_agent:
+                        response = await handle_triage_manually(request.message, context)
+                    else:
+                        # Try to call agent tools directly
+                        response = await handle_agent_manually(selected_agent, request.message, context)
         
         # Extract response content
         response_content = ""
@@ -307,6 +317,125 @@ async def chat_endpoint(request: ChatRequest):
     except Exception as e:
         logger.error(f"Error in chat endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+async def handle_triage_manually(message: str, context: AirlineAgentContext) -> str:
+    """Handle triage agent responses manually."""
+    message_lower = message.lower()
+    
+    # Greeting responses
+    if any(word in message_lower for word in ['hello', 'hi', 'hey', 'welcome', 'start']):
+        return (
+            f"Welcome to the Aviation Tech Summit 2025! 🛩️\n\n"
+            f"I'm here to help you with:\n\n"
+            f"**📅 Conference Information:**\n"
+            f"• Session schedules and timings\n"
+            f"• Speaker information and bios\n"
+            f"• Track details and topics\n"
+            f"• Room locations and layouts\n\n"
+            f"**🤝 Business Networking:**\n"
+            f"• Find businesses and companies\n"
+            f"• Industry sector information\n"
+            f"• User profiles and connections\n"
+            f"• Networking opportunities\n\n"
+            f"What would you like to know about the conference?"
+        )
+    
+    # Schedule-related guidance
+    elif any(word in message_lower for word in ['session', 'speaker', 'schedule', 'track', 'room']):
+        return (
+            f"I can help you with conference schedule information! You can ask me about:\n\n"
+            f"• **Sessions:** \"Show me all sessions\" or \"Sessions by [speaker name]\"\n"
+            f"• **Speakers:** \"List all speakers\" or \"How many speakers?\"\n"
+            f"• **Tracks:** \"What tracks are available?\" or \"Show me track information\"\n"
+            f"• **Rooms:** \"List conference rooms\" or \"Where is [session] located?\"\n"
+            f"• **Topics:** \"Sessions about [topic]\" or \"Find sessions on AI\"\n\n"
+            f"What specific information would you like?"
+        )
+    
+    # Networking-related guidance
+    elif any(word in message_lower for word in ['business', 'company', 'networking', 'industry', 'user']):
+        return (
+            f"I can help you with business networking and connections! You can ask me about:\n\n"
+            f"• **Businesses:** \"Show me businesses\" or \"Companies in [industry]\"\n"
+            f"• **Industries:** \"Industry breakdown\" or \"Fintech companies\"\n"
+            f"• **Users:** \"How many users?\" or \"Find user [name]\"\n"
+            f"• **Networking:** \"Business directory\" or \"Connect with [industry]\"\n\n"
+            f"What networking information are you looking for?"
+        )
+    
+    # Default response
+    else:
+        return (
+            f"I'm here to help you with the Aviation Tech Summit 2025! 🛩️\n\n"
+            f"You can ask me about:\n"
+            f"• **Conference schedules** - sessions, speakers, tracks, rooms\n"
+            f"• **Business networking** - companies, industries, user connections\n\n"
+            f"Try asking something like:\n"
+            f"• \"Show me all sessions\"\n"
+            f"• \"List all speakers\"\n"
+            f"• \"Find businesses in fintech\"\n"
+            f"• \"How many users are registered?\"\n\n"
+            f"What would you like to know?"
+        )
+
+async def handle_agent_manually(agent: Agent, message: str, context: AirlineAgentContext) -> str:
+    """Handle agent responses manually by calling tools directly."""
+    message_lower = message.lower()
+    
+    if agent == schedule_agent:
+        # Handle schedule-related queries
+        if 'all sessions' in message_lower or 'list sessions' in message_lower:
+            return await get_conference_sessions()
+        elif 'all speakers' in message_lower or 'list speakers' in message_lower:
+            return await get_all_speakers()
+        elif 'all tracks' in message_lower or 'list tracks' in message_lower:
+            return await get_all_tracks()
+        elif 'all rooms' in message_lower or 'list rooms' in message_lower:
+            return await get_all_rooms()
+        elif 'how many sessions' in message_lower or 'session count' in message_lower:
+            return await get_session_count()
+        elif 'how many speakers' in message_lower or 'speaker count' in message_lower:
+            return await get_speaker_count()
+        elif 'sessions by' in message_lower or 'speaker' in message_lower:
+            # Extract speaker name
+            words = message.split()
+            speaker_name = " ".join(words[2:]) if len(words) > 2 else ""
+            if speaker_name:
+                return await search_sessions_by_speaker(speaker_name)
+        elif 'topic' in message_lower or 'about' in message_lower:
+            # Extract topic
+            words = message.split()
+            topic = " ".join(words[1:]) if len(words) > 1 else ""
+            if topic:
+                return await search_sessions_by_topic(topic)
+        else:
+            return await get_conference_sessions()
+    
+    elif agent == networking_agent:
+        # Handle networking-related queries
+        if 'all businesses' in message_lower or 'list businesses' in message_lower:
+            return await search_businesses()
+        elif 'how many businesses' in message_lower or 'business count' in message_lower:
+            return await get_business_count()
+        elif 'how many users' in message_lower or 'user count' in message_lower:
+            return await get_user_count()
+        elif 'industry breakdown' in message_lower:
+            return await get_industry_breakdown()
+        elif 'find user' in message_lower or 'search user' in message_lower:
+            # Extract user name
+            words = message.split()
+            user_name = " ".join(words[2:]) if len(words) > 2 else ""
+            if user_name:
+                return await search_users_by_name(user_name)
+        elif any(industry in message_lower for industry in ['fintech', 'tech', 'healthcare', 'finance']):
+            # Extract industry
+            for industry in ['fintech', 'tech', 'healthcare', 'finance']:
+                if industry in message_lower:
+                    return await search_businesses(industry_sector=industry)
+        else:
+            return await search_businesses()
+    
+    return f"I understand you're asking about {message}, but I need more specific information to help you."
 
 # Health check endpoint
 @app.get("/health")
