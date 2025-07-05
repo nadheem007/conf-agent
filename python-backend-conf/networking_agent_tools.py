@@ -1,6 +1,5 @@
 from typing import Optional
 import logging
-from context import AirlineAgentContext
 from database import db_client
 from agents import function_tool
 
@@ -8,8 +7,7 @@ logger = logging.getLogger(__name__)
 
 @function_tool(
     name_override="search_businesses",
-    description_override="Search for businesses by industry sector, location, company name, or other criteria.",
-    strict_json_schema=False
+    description_override="Search for businesses by industry sector, location, company name, or other criteria."
 )
 async def search_businesses(
     industry_sector: Optional[str] = None,
@@ -85,8 +83,7 @@ async def search_businesses(
 
 @function_tool(
     name_override="get_user_businesses",
-    description_override="Get businesses associated with a specific user.",
-    strict_json_schema=False
+    description_override="Get businesses associated with a specific user."
 )
 async def get_user_businesses(user_id: str) -> str:
     """Get businesses for a specific user."""
@@ -117,8 +114,7 @@ async def get_user_businesses(user_id: str) -> str:
 
 @function_tool(
     name_override="get_business_count",
-    description_override="Get the total number of registered businesses.",
-    strict_json_schema=False
+    description_override="Get the total number of registered businesses."
 )
 async def get_business_count() -> str:
     """Get the total number of registered businesses."""
@@ -165,8 +161,7 @@ async def get_business_count() -> str:
 
 @function_tool(
     name_override="get_user_count",
-    description_override="Get the total number of registered users.",
-    strict_json_schema=False
+    description_override="Get the total number of registered users."
 )
 async def get_user_count() -> str:
     """Get the total number of registered users."""
@@ -187,8 +182,7 @@ async def get_user_count() -> str:
 
 @function_tool(
     name_override="search_users_by_name",
-    description_override="Search for users by name or email.",
-    strict_json_schema=False
+    description_override="Search for users by name or email."
 )
 async def search_users_by_name(search_term: str, limit: Optional[int] = 10) -> str:
     """Search for users by name or email."""
@@ -240,8 +234,7 @@ async def search_users_by_name(search_term: str, limit: Optional[int] = 10) -> s
 
 @function_tool(
     name_override="get_industry_breakdown",
-    description_override="Get a breakdown of businesses by industry sector.",
-    strict_json_schema=False
+    description_override="Get a breakdown of businesses by industry sector."
 )
 async def get_industry_breakdown() -> str:
     """Get a breakdown of businesses by industry sector."""

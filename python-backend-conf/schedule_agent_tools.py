@@ -1,6 +1,5 @@
 from typing import Optional
 import logging
-from context import AirlineAgentContext
 from database import db_client
 from agents import function_tool
 
@@ -8,8 +7,7 @@ logger = logging.getLogger(__name__)
 
 @function_tool(
     name_override="get_conference_sessions",
-    description_override="Fetch conference sessions with optional filtering by speaker, topic, room, track, or date.",
-    strict_json_schema=False
+    description_override="Fetch conference sessions with optional filtering by speaker, topic, room, track, or date."
 )
 async def get_conference_sessions(
     speaker_name: Optional[str] = None,
@@ -62,8 +60,7 @@ async def get_conference_sessions(
 
 @function_tool(
     name_override="get_all_speakers",
-    description_override="Get all unique speakers from the conference.",
-    strict_json_schema=False
+    description_override="Get all unique speakers from the conference."
 )
 async def get_all_speakers() -> str:
     """Get all unique speakers from the conference."""
@@ -96,8 +93,7 @@ async def get_all_speakers() -> str:
 
 @function_tool(
     name_override="get_all_tracks",
-    description_override="Get all unique tracks from the conference.",
-    strict_json_schema=False
+    description_override="Get all unique tracks from the conference."
 )
 async def get_all_tracks() -> str:
     """Get all unique tracks from the conference."""
@@ -130,8 +126,7 @@ async def get_all_tracks() -> str:
 
 @function_tool(
     name_override="get_all_rooms",
-    description_override="Get all unique conference rooms.",
-    strict_json_schema=False
+    description_override="Get all unique conference rooms."
 )
 async def get_all_rooms() -> str:
     """Get all unique conference rooms."""
@@ -164,8 +159,7 @@ async def get_all_rooms() -> str:
 
 @function_tool(
     name_override="search_sessions_by_speaker",
-    description_override="Search for sessions by a specific speaker name.",
-    strict_json_schema=False
+    description_override="Search for sessions by a specific speaker name."
 )
 async def search_sessions_by_speaker(speaker_name: str) -> str:
     """Search for sessions by a specific speaker."""
@@ -197,8 +191,7 @@ async def search_sessions_by_speaker(speaker_name: str) -> str:
 
 @function_tool(
     name_override="search_sessions_by_topic",
-    description_override="Search for sessions containing specific topic keywords.",
-    strict_json_schema=False
+    description_override="Search for sessions containing specific topic keywords."
 )
 async def search_sessions_by_topic(topic_keyword: str) -> str:
     """Search for sessions by topic keyword."""
@@ -237,8 +230,7 @@ async def search_sessions_by_topic(topic_keyword: str) -> str:
 
 @function_tool(
     name_override="get_session_count",
-    description_override="Get the total number of conference sessions.",
-    strict_json_schema=False
+    description_override="Get the total number of conference sessions."
 )
 async def get_session_count() -> str:
     """Get the total number of conference sessions."""
@@ -284,8 +276,7 @@ async def get_session_count() -> str:
 
 @function_tool(
     name_override="get_speaker_count",
-    description_override="Get the total number of unique speakers.",
-    strict_json_schema=False
+    description_override="Get the total number of unique speakers."
 )
 async def get_speaker_count() -> str:
     """Get the total number of unique speakers."""
