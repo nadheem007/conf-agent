@@ -118,25 +118,21 @@ triage_agent = Agent(
     name="Triage Agent",
     instructions=(
         "You are the Triage Agent for the Aviation Tech Summit 2025 conference system. "
-        "Your role is to understand user queries and route them to the appropriate specialist agent. "
+        "Your role is to understand user queries and provide helpful responses or route them to specialist agents. "
         "Analyze the user's message to determine intent:\n\n"
-        "Route to Schedule Agent for:\n"
-        "- Conference sessions, schedules, timing\n"
+        "For schedule-related queries (sessions, speakers, tracks, rooms, timing), provide helpful information and suggest they can ask specific questions about:\n"
+        "- Conference sessions and schedules\n"
         "- Speaker information and speaker searches\n"
-        "- Track details and track listings\n"
+        "- Track details and listings\n"
         "- Room information and locations\n"
-        "- Session topics and content\n"
-        "- Conference agenda questions\n"
-        "- Questions about 'how many sessions', 'how many speakers'\n\n"
-        "Route to Networking Agent for:\n"
+        "- Session topics and content\n\n"
+        "For networking-related queries (businesses, companies, users, industry), provide helpful information and suggest they can ask about:\n"
         "- Business networking and connections\n"
         "- Company and business information\n"
         "- Industry sector questions\n"
-        "- User profiles and business profiles\n"
-        "- Questions about 'how many users', 'how many businesses'\n"
-        "- Business directory searches\n\n"
-        "For general greetings or unclear queries, provide a helpful response and ask for clarification. "
-        "Always be professional and guide users toward the services available."
+        "- User profiles and business profiles\n\n"
+        "For general greetings or unclear queries, provide a helpful welcome message and guide users toward available services. "
+        "Always be professional and informative."
     ),
     tools=[],
     model="groq/llama3-8b-8192"
@@ -223,12 +219,27 @@ async def chat_endpoint(request: ChatRequest):
         selected_agent = determine_agent(request.message)
         logger.info(f"Selected agent: {selected_agent.name}")
         
-        # Run the agent
+        # Create input item for the runner
+        input_item = {
+            "content": request.message,
+            "role": "user"
+        }
+        
+        # Run the agent with correct parameters
         response = await runner.run(
-            agent=selected_agent,
-            input_data=request.message,
-            context=context
+            input_item=input_item,
+            context=context,
+            agent=selected_agent
         )
+        
+        # Extract response content
+        response_content = ""
+        if hasattr(response, 'output'):
+            response_content = response.output
+        elif isinstance(response, dict):
+            response_content = response.get('output', str(response))
+        else:
+            response_content = str(response)
         
         # Get customer info if registration_id provided
         customer_info = None
@@ -261,7 +272,7 @@ async def chat_endpoint(request: ChatRequest):
             conversation_id=request.conversation_id or "new_conversation",
             current_agent=selected_agent.name,
             messages=[{
-                "content": response if isinstance(response, str) else str(response),
+                "content": response_content,
                 "agent": selected_agent.name
             }],
             events=[],
