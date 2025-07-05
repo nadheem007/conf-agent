@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional
 import logging
 from context import AirlineAgentContext
 from database import db_client
@@ -8,15 +8,15 @@ logger = logging.getLogger(__name__)
 
 @function_tool(
     name_override="search_businesses",
-    description_override="Search for businesses by industry sector, location, company name, or other criteria."
+    description_override="Search for businesses by industry sector, location, company name, or other criteria.",
+    strict_json_schema=False
 )
 async def search_businesses(
     industry_sector: Optional[str] = None,
     location: Optional[str] = None,
     company_name: Optional[str] = None,
     sub_sector: Optional[str] = None,
-    limit: Optional[int] = 10,
-    context: Optional[AirlineAgentContext] = None
+    limit: Optional[int] = 10
 ) -> str:
     """Search for businesses with various filters."""
     try:
@@ -85,9 +85,10 @@ async def search_businesses(
 
 @function_tool(
     name_override="get_user_businesses",
-    description_override="Get businesses associated with a specific user."
+    description_override="Get businesses associated with a specific user.",
+    strict_json_schema=False
 )
-async def get_user_businesses(user_id: str, context: Optional[AirlineAgentContext] = None) -> str:
+async def get_user_businesses(user_id: str) -> str:
     """Get businesses for a specific user."""
     try:
         businesses = await db_client.query(
@@ -116,9 +117,10 @@ async def get_user_businesses(user_id: str, context: Optional[AirlineAgentContex
 
 @function_tool(
     name_override="get_business_count",
-    description_override="Get the total number of registered businesses."
+    description_override="Get the total number of registered businesses.",
+    strict_json_schema=False
 )
-async def get_business_count(context: Optional[AirlineAgentContext] = None) -> str:
+async def get_business_count() -> str:
     """Get the total number of registered businesses."""
     try:
         businesses = await db_client.query(
@@ -163,9 +165,10 @@ async def get_business_count(context: Optional[AirlineAgentContext] = None) -> s
 
 @function_tool(
     name_override="get_user_count",
-    description_override="Get the total number of registered users."
+    description_override="Get the total number of registered users.",
+    strict_json_schema=False
 )
-async def get_user_count(context: Optional[AirlineAgentContext] = None) -> str:
+async def get_user_count() -> str:
     """Get the total number of registered users."""
     try:
         users = await db_client.query(
@@ -184,13 +187,10 @@ async def get_user_count(context: Optional[AirlineAgentContext] = None) -> str:
 
 @function_tool(
     name_override="search_users_by_name",
-    description_override="Search for users by name or email."
+    description_override="Search for users by name or email.",
+    strict_json_schema=False
 )
-async def search_users_by_name(
-    search_term: str,
-    limit: Optional[int] = 10,
-    context: Optional[AirlineAgentContext] = None
-) -> str:
+async def search_users_by_name(search_term: str, limit: Optional[int] = 10) -> str:
     """Search for users by name or email."""
     try:
         users = await db_client.query(
@@ -240,9 +240,10 @@ async def search_users_by_name(
 
 @function_tool(
     name_override="get_industry_breakdown",
-    description_override="Get a breakdown of businesses by industry sector."
+    description_override="Get a breakdown of businesses by industry sector.",
+    strict_json_schema=False
 )
-async def get_industry_breakdown(context: Optional[AirlineAgentContext] = None) -> str:
+async def get_industry_breakdown() -> str:
     """Get a breakdown of businesses by industry sector."""
     try:
         businesses = await db_client.query(

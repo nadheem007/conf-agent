@@ -161,6 +161,10 @@ async def create_context(registration_id: Optional[str] = None) -> AirlineAgentC
                 context.user_id = user_data["id"]
                 context.registration_id = registration_id
                 details = user_data.get("details", {})
+                context.user_name = details.get("user_name")
+                context.email = details.get("email")
+                context.is_conference_attendee = True
+                context.conference_name = "Aviation Tech Summit 2025"
                 logger.info(f"Loaded context for registration_id: {registration_id}")
             else:
                 logger.warning(f"No user found for registration_id: {registration_id}")

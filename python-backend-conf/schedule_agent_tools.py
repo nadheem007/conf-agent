@@ -1,5 +1,4 @@
-from typing import Optional, List, Dict, Any
-from datetime import datetime, date
+from typing import Optional
 import logging
 from context import AirlineAgentContext
 from database import db_client
@@ -9,7 +8,8 @@ logger = logging.getLogger(__name__)
 
 @function_tool(
     name_override="get_conference_sessions",
-    description_override="Fetch conference sessions with optional filtering by speaker, topic, room, track, or date."
+    description_override="Fetch conference sessions with optional filtering by speaker, topic, room, track, or date.",
+    strict_json_schema=False
 )
 async def get_conference_sessions(
     speaker_name: Optional[str] = None,
@@ -17,8 +17,7 @@ async def get_conference_sessions(
     conference_room_name: Optional[str] = None,
     track_name: Optional[str] = None,
     conference_date: Optional[str] = None,
-    limit: Optional[int] = 10,
-    context: Optional[AirlineAgentContext] = None
+    limit: Optional[int] = 10
 ) -> str:
     """Fetch conference sessions with filtering options."""
     try:
@@ -63,9 +62,10 @@ async def get_conference_sessions(
 
 @function_tool(
     name_override="get_all_speakers",
-    description_override="Get all unique speakers from the conference."
+    description_override="Get all unique speakers from the conference.",
+    strict_json_schema=False
 )
-async def get_all_speakers(context: Optional[AirlineAgentContext] = None) -> str:
+async def get_all_speakers() -> str:
     """Get all unique speakers from the conference."""
     try:
         speakers_data = await db_client.query(
@@ -96,9 +96,10 @@ async def get_all_speakers(context: Optional[AirlineAgentContext] = None) -> str
 
 @function_tool(
     name_override="get_all_tracks",
-    description_override="Get all unique tracks from the conference."
+    description_override="Get all unique tracks from the conference.",
+    strict_json_schema=False
 )
-async def get_all_tracks(context: Optional[AirlineAgentContext] = None) -> str:
+async def get_all_tracks() -> str:
     """Get all unique tracks from the conference."""
     try:
         tracks_data = await db_client.query(
@@ -129,9 +130,10 @@ async def get_all_tracks(context: Optional[AirlineAgentContext] = None) -> str:
 
 @function_tool(
     name_override="get_all_rooms",
-    description_override="Get all unique conference rooms."
+    description_override="Get all unique conference rooms.",
+    strict_json_schema=False
 )
-async def get_all_rooms(context: Optional[AirlineAgentContext] = None) -> str:
+async def get_all_rooms() -> str:
     """Get all unique conference rooms."""
     try:
         rooms_data = await db_client.query(
@@ -162,9 +164,10 @@ async def get_all_rooms(context: Optional[AirlineAgentContext] = None) -> str:
 
 @function_tool(
     name_override="search_sessions_by_speaker",
-    description_override="Search for sessions by a specific speaker name."
+    description_override="Search for sessions by a specific speaker name.",
+    strict_json_schema=False
 )
-async def search_sessions_by_speaker(speaker_name: str, context: Optional[AirlineAgentContext] = None) -> str:
+async def search_sessions_by_speaker(speaker_name: str) -> str:
     """Search for sessions by a specific speaker."""
     try:
         sessions = await db_client.query(
@@ -194,12 +197,13 @@ async def search_sessions_by_speaker(speaker_name: str, context: Optional[Airlin
 
 @function_tool(
     name_override="search_sessions_by_topic",
-    description_override="Search for sessions containing specific topic keywords."
+    description_override="Search for sessions containing specific topic keywords.",
+    strict_json_schema=False
 )
-async def search_sessions_by_topic(topic_keyword: str, context: Optional[AirlineAgentContext] = None) -> str:
+async def search_sessions_by_topic(topic_keyword: str) -> str:
     """Search for sessions by topic keyword."""
     try:
-        # Use ilike for case-insensitive partial matching
+        # Get all sessions and filter by topic keyword
         sessions = await db_client.query(
             table_name="conference_schedules",
             select_fields="*"
@@ -233,9 +237,10 @@ async def search_sessions_by_topic(topic_keyword: str, context: Optional[Airline
 
 @function_tool(
     name_override="get_session_count",
-    description_override="Get the total number of conference sessions."
+    description_override="Get the total number of conference sessions.",
+    strict_json_schema=False
 )
-async def get_session_count(context: Optional[AirlineAgentContext] = None) -> str:
+async def get_session_count() -> str:
     """Get the total number of conference sessions."""
     try:
         sessions = await db_client.query(
@@ -279,9 +284,10 @@ async def get_session_count(context: Optional[AirlineAgentContext] = None) -> st
 
 @function_tool(
     name_override="get_speaker_count",
-    description_override="Get the total number of unique speakers."
+    description_override="Get the total number of unique speakers.",
+    strict_json_schema=False
 )
-async def get_speaker_count(context: Optional[AirlineAgentContext] = None) -> str:
+async def get_speaker_count() -> str:
     """Get the total number of unique speakers."""
     try:
         speakers_data = await db_client.query(
