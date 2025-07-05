@@ -1,245 +1,332 @@
-from context import AirlineAgentContext
-from context_utils import create_initial_context, load_user_context, load_customer_context
-from fastapi import FastAPI
-from pydantic import BaseModel
-import logging
 import os
-from agents import Agent, Runner, function_tool
-from common_tools import get_booking_details
-from cancellation_agent_tools import cancel_flight
-from seat_booking_agent_tools import update_seat, display_seat_map
-from flight_status_agent_tools import flight_status_tool
-from schedule_agent_tools import get_conference_sessions, get_all_speakers, get_all_tracks, get_all_rooms
-from networking_agent_tools import search_businesses, get_user_businesses, display_business_form, add_business
-from semantic_mappings import SEMANTIC_MAPPINGS
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
+import logging
+from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Define input model for chat endpoint
-class ChatRequest(BaseModel):
-    message: str
-    confirmation_number: str | None = None
-    account_number: str | None = None
-    registration_id: str | None = None
-    user_id: str | None = None
-    business_details: dict | None = None
-    organization_id: str | None = None
+# Import context and database
+from context import AirlineAgentContext
+from database import db_client
+
+# Import agents framework
+from agents import Agent, Runner
+
+# Import tools
+from schedule_agent_tools import (
+    get_conference_sessions,
+    get_all_speakers, 
+    get_all_tracks,
+    get_all_rooms,
+    search_sessions_by_speaker,
+    search_sessions_by_topic,
+    get_session_count,
+    get_speaker_count
+)
+from networking_agent_tools import (
+    search_businesses,
+    get_user_businesses,
+    get_business_count,
+    get_user_count,
+    search_users_by_name,
+    get_industry_breakdown
+)
 
 # Initialize FastAPI app
-app = FastAPI()
+app = FastAPI(title="Conference Agent System", version="1.0.0")
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust to specific origins (e.g., ["http://localhost:3000"]) in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Define agent tools
-# CUSTOMER_SERVICE_TOOLS = [
-#     get_booking_details,
-#     cancel_flight,
-#     update_seat,
-#     display_seat_map,
-#     flight_status_tool,
-# ]
+# Request/Response models
+class ChatRequest(BaseModel):
+    message: str
+    conversation_id: Optional[str] = None
+    registration_id: Optional[str] = None
+    user_id: Optional[str] = None
 
-CONFERENCE_TOOLS = [
-    get_conference_sessions,
-    get_all_speakers,
-    get_all_tracks,
-    get_all_rooms,
-]
-
-# NETWORKING_TOOLS = [
-#     search_businesses,
-#     get_user_businesses,
-#     display_business_form,
-#     add_business,
-# ]
+class ChatResponse(BaseModel):
+    conversation_id: str
+    current_agent: str
+    messages: list
+    events: list
+    context: Dict[str, Any]
+    agents: list
+    guardrails: list
+    customer_info: Optional[Dict[str, Any]] = None
 
 # Define agents
-# customer_service_agent = Agent(
-#     name="CustomerServiceAgent",
-#     instructions=(
-#         "You are a customer service agent for an airline. Your role is to assist users with flight-related requests, "
-#         "such as retrieving booking details, canceling flights, updating seats, or checking flight status. Always verify "
-#         "user information using the provided context (e.g., confirmation_number, account_number). If the user provides "
-#         "insufficient information, request clarification. Use the provided tools to fetch or update data and respond in a "
-#         "professional, concise manner."
-#     ),
-#     tools=CUSTOMER_SERVICE_TOOLS,
-#     model="llama3-8b-8192"
-# )
-
-conference_agent = Agent(
-    name="ConferenceAgent",
+schedule_agent = Agent(
+    name="Schedule Agent",
     instructions=(
-        "You are a conference assistant for the Aviation Tech Summit 2025. Your role is to help users find conference sessions, "
-        "speakers, tracks, or rooms based on their queries. Use the registration_id from the context to personalize responses. "
-        "If the user is not registered, suggest registration. Use the provided tools to fetch data and respond clearly."
+        "You are the Schedule Agent for the Aviation Tech Summit 2025. Your role is to provide detailed "
+        "conference schedule information including sessions, speakers, tracks, and rooms. "
+        "Use the provided tools to fetch real data from the conference_schedules table. "
+        "Always provide accurate, up-to-date information about the conference. "
+        "If asked about counts, use the appropriate count tools. "
+        "Format your responses clearly and include relevant details like time, location, and speaker information."
     ),
-    tools=CONFERENCE_TOOLS,
-    model="llama3-8b-8192"
+    tools=[
+        get_conference_sessions,
+        get_all_speakers,
+        get_all_tracks, 
+        get_all_rooms,
+        search_sessions_by_speaker,
+        search_sessions_by_topic,
+        get_session_count,
+        get_speaker_count
+    ],
+    model="groq/llama3-8b-8192"
 )
 
-# networking_agent = Agent(
-#     name="NetworkingAgent",
-#     instructions=(
-#         "You are a networking assistant for the Aviation Tech Summit 2025. Your role is to help users find businesses, "
-#         "manage their business profiles, or register new businesses. Use the user_id and organization_id from the context "
-#         "to personalize responses. If the user provides business details, validate and process them using the provided tools. "
-#         "Respond professionally and concisely."
-#     ),
-#     tools=NETWORKING_TOOLS,
-#     model="llama3-8b-8192"
-# )
+networking_agent = Agent(
+    name="Networking Agent", 
+    instructions=(
+        "You are the Networking Agent for the Aviation Tech Summit 2025. Your role is to help users "
+        "find businesses, manage business profiles, and facilitate networking connections. "
+        "Use the provided tools to fetch real data from the users and ib_businesses tables. "
+        "Provide helpful information about registered businesses, industry breakdowns, and user connections. "
+        "Always use actual data from the database, not made-up information. "
+        "Help users discover networking opportunities and business connections."
+    ),
+    tools=[
+        search_businesses,
+        get_user_businesses,
+        get_business_count,
+        get_user_count,
+        search_users_by_name,
+        get_industry_breakdown
+    ],
+    model="groq/llama3-8b-8192"
+)
 
 triage_agent = Agent(
-    name="TriageAgent",
+    name="Triage Agent",
     instructions=(
-        "You are a triage agent that routes user requests to the appropriate specialized agent. Analyze the user's message "
-        "and context to determine the intent. Use semantic mappings to identify relevant keywords or phrases. Route to:"
-        # "- CustomerServiceAgent for flight-related requests (e.g., booking, cancellation, seat changes, flight status)."
-        "- ConferenceAgent for conference-related requests (e.g., sessions, speakers, tracks, rooms)."
-        # "- NetworkingAgent for business or networking-related requests (e.g., business search, profile management)."
-        "If the intent is unclear, ask for clarification. Do not execute tools directly; delegate to the appropriate agent."
+        "You are the Triage Agent for the Aviation Tech Summit 2025 conference system. "
+        "Your role is to understand user queries and route them to the appropriate specialist agent. "
+        "Analyze the user's message to determine intent:\n\n"
+        "Route to Schedule Agent for:\n"
+        "- Conference sessions, schedules, timing\n"
+        "- Speaker information and speaker searches\n"
+        "- Track details and track listings\n"
+        "- Room information and locations\n"
+        "- Session topics and content\n"
+        "- Conference agenda questions\n"
+        "- Questions about 'how many sessions', 'how many speakers'\n\n"
+        "Route to Networking Agent for:\n"
+        "- Business networking and connections\n"
+        "- Company and business information\n"
+        "- Industry sector questions\n"
+        "- User profiles and business profiles\n"
+        "- Questions about 'how many users', 'how many businesses'\n"
+        "- Business directory searches\n\n"
+        "For general greetings or unclear queries, provide a helpful response and ask for clarification. "
+        "Always be professional and guide users toward the services available."
     ),
     tools=[],
-    model="llama3-8b-8192"
+    model="groq/llama3-8b-8192"
 )
 
-async def create_context(
-    confirmation_number: str | None = None,
-    account_number: str | None = None,
-    registration_id: str | None = None,
-    user_id: str | None = None,
-    business_details: dict | None = None,
-    organization_id: str | None = None,
-) -> AirlineAgentContext:
-    """Create and populate an AirlineAgentContext based on provided identifiers."""
-    logger.debug(f"Creating context with confirmation_number={confirmation_number}, "
-                 f"account_number={account_number}, registration_id={registration_id}, "
-                 f"user_id={user_id}, organization_id={organization_id}")
+# Create context function
+async def create_context(registration_id: Optional[str] = None) -> AirlineAgentContext:
+    """Create and populate context based on registration ID."""
+    context = AirlineAgentContext()
     
-    ctx = await create_initial_context()
-    
-    # Load user context if registration_id is provided
     if registration_id:
-        ctx = await load_user_context(registration_id)
+        try:
+            # Try to load user data
+            user_data = await db_client.query(
+                table_name="users",
+                select_fields="id, details",
+                filters={"details->>registration_id": registration_id},
+                single=True
+            )
+            
+            if user_data:
+                context.user_id = user_data["id"]
+                context.registration_id = registration_id
+                details = user_data.get("details", {})
+                logger.info(f"Loaded context for registration_id: {registration_id}")
+            else:
+                logger.warning(f"No user found for registration_id: {registration_id}")
+                
+        except Exception as e:
+            logger.error(f"Error loading user context: {e}")
     
-    # Load customer context if account_number is provided
-    if account_number:
-        ctx = await load_customer_context(account_number)
-    
-    # Update context with additional fields
-    if confirmation_number:
-        ctx.confirmation_number = confirmation_number
-    if user_id:
-        ctx.user_id = user_id
-    if organization_id:
-        ctx.organization_id = organization_id
-    
-    logger.info(f"Context created: {ctx}")
-    return ctx
+    return context
 
-# Initialize Runner without arguments
-runner = Runner()
-
-# Define semantic routing logic
-def route_request(message: str, ctx: AirlineAgentContext) -> Agent:
-    """Route the request to the appropriate agent based on the message content."""
+# Route determination
+def determine_agent(message: str) -> Agent:
+    """Determine which agent should handle the message."""
     message_lower = message.lower()
     
-    for intent, mappings in SEMANTIC_MAPPINGS.items():
-        for keyword in mappings.get("keywords", []):
-            if keyword.lower() in message_lower:
-                logger.debug(f"Matched intent '{intent}' with keyword '{keyword}'")
-                # if intent == "customer_service":
-                #     return customer_service_agent
-                if intent == "conference":
-                    return conference_agent
-                # elif intent == "networking":
-                #     return networking_agent
+    # Schedule-related keywords
+    schedule_keywords = [
+        'session', 'sessions', 'speaker', 'speakers', 'schedule', 'agenda',
+        'track', 'tracks', 'room', 'rooms', 'conference', 'talk', 'talks',
+        'presentation', 'presentations', 'topic', 'topics', 'time', 'when',
+        'how many sessions', 'how many speakers', 'session count', 'speaker count'
+    ]
     
-    logger.debug("No specific intent matched, defaulting to triage_agent")
+    # Networking-related keywords  
+    networking_keywords = [
+        'business', 'businesses', 'company', 'companies', 'networking',
+        'industry', 'sector', 'user', 'users', 'profile', 'profiles',
+        'connect', 'connection', 'directory', 'how many users', 'how many businesses',
+        'business count', 'user count', 'industry breakdown'
+    ]
+    
+    # Check for schedule keywords
+    if any(keyword in message_lower for keyword in schedule_keywords):
+        return schedule_agent
+        
+    # Check for networking keywords
+    if any(keyword in message_lower for keyword in networking_keywords):
+        return networking_agent
+    
+    # Default to triage for unclear queries
     return triage_agent
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
+# Initialize runner
+runner = Runner()
 
-@app.post("/chat")
-async def chat(request: ChatRequest):
-    """Handle user chat requests and route to appropriate agent."""
+# Chat endpoint
+@app.post("/chat", response_model=ChatResponse)
+async def chat_endpoint(request: ChatRequest):
+    """Handle chat requests and route to appropriate agent."""
     try:
-        logger.debug(f"Received chat request: {request}")
+        logger.info(f"Received message: {request.message}")
         
         # Create context
-        ctx = await create_context(
-            confirmation_number=request.confirmation_number,
-            account_number=request.account_number,
-            registration_id=request.registration_id,
-            user_id=request.user_id,
-            business_details=request.business_details,
-            organization_id=request.organization_id,
+        context = await create_context(request.registration_id)
+        
+        # Determine which agent to use
+        selected_agent = determine_agent(request.message)
+        logger.info(f"Selected agent: {selected_agent.name}")
+        
+        # Run the agent
+        response = await runner.run(
+            agent=selected_agent,
+            input_data=request.message,
+            context=context
         )
         
-        # Route to appropriate agent
-        selected_agent = route_request(request.message, ctx)
-        logger.info(f"Routed to agent: {selected_agent.name}")
+        # Get customer info if registration_id provided
+        customer_info = None
+        if request.registration_id:
+            try:
+                user_data = await db_client.query(
+                    table_name="users",
+                    select_fields="id, details",
+                    filters={"details->>registration_id": request.registration_id},
+                    single=True
+                )
+                
+                if user_data:
+                    details = user_data.get("details", {})
+                    customer_info = {
+                        "customer": {
+                            "name": details.get("user_name", f"{details.get('firstName', '')} {details.get('lastName', '')}").strip(),
+                            "email": details.get("email"),
+                            "registration_id": request.registration_id,
+                            "is_conference_attendee": True,
+                            "conference_name": "Aviation Tech Summit 2025"
+                        },
+                        "bookings": []
+                    }
+            except Exception as e:
+                logger.error(f"Error fetching customer info: {e}")
         
-        # Execute the agent using Runner
-        response = await runner.run(selected_agent, request.message, context=ctx)
+        # Format response
+        return ChatResponse(
+            conversation_id=request.conversation_id or "new_conversation",
+            current_agent=selected_agent.name,
+            messages=[{
+                "content": response if isinstance(response, str) else str(response),
+                "agent": selected_agent.name
+            }],
+            events=[],
+            context=context.dict(),
+            agents=[
+                {
+                    "name": "Triage Agent",
+                    "description": "Routes queries to appropriate specialists",
+                    "handoffs": ["Schedule Agent", "Networking Agent"],
+                    "tools": [],
+                    "input_guardrails": []
+                },
+                {
+                    "name": "Schedule Agent", 
+                    "description": "Conference schedule and speaker information",
+                    "handoffs": ["Triage Agent"],
+                    "tools": ["get_conference_sessions", "get_all_speakers", "get_all_tracks"],
+                    "input_guardrails": []
+                },
+                {
+                    "name": "Networking Agent",
+                    "description": "Business networking and connections", 
+                    "handoffs": ["Triage Agent"],
+                    "tools": ["search_businesses", "get_user_businesses", "get_business_count"],
+                    "input_guardrails": []
+                }
+            ],
+            guardrails=[],
+            customer_info=customer_info
+        )
         
-        logger.info(f"Agent response: {response}")
-        return {"response": response}
     except Exception as e:
-        logger.error(f"Error processing chat request: {e}", exc_info=True)
-        return {"error": str(e)}, 500
+        logger.error(f"Error in chat endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
-# Updated: User endpoint to fetch user based on registration_id in details column
-@app.get("/user/{user_id}")
-async def get_user(user_id: str):
-    logger.debug(f"Received request for user_id: {user_id}")
-    ctx = await create_initial_context()  # Start with initial context
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy", "message": "Conference Agent System is running"}
 
-    from database import db_client  # Import db_client here or at the top level
+# User endpoint
+@app.get("/user/{registration_id}")
+async def get_user(registration_id: str):
+    """Get user information by registration ID."""
     try:
-        logger.debug(f"Attempting to query Supabase for user_id: {user_id}")
-        response = db_client.table("users").select("id, details").filter("details->>registration_id", "eq", str(user_id)).execute()
-        users = response.data
-        logger.debug(f"Supabase raw response data: {users}")
-
-        if users:
-            user = users[0]
-            logger.debug(f"Found user: {user}")
-            registration_id = user["details"].get("registration_id")
-            logger.debug(f"Extracted registration_id: {registration_id}")
-
-            if registration_id is not None:
-                registration_id_str = str(registration_id)
-                logger.debug(f"Calling load_user_context with registration_id_str: {registration_id_str}")
-                try:
-                    ctx = await load_user_context(registration_id_str)
-                    logger.debug(f"load_user_context completed. ctx.user_id: {ctx.user_id}")
-                    if ctx.user_id:
-                        return {"user_id": user["id"], "registration_id": registration_id_str, "status": "found", "details": user["details"]}
-                    else:
-                        logger.warning(f"load_user_context did not set user_id in context for registration_id: {registration_id_str}")
-                        return {"error": "User context could not be loaded fully"}, 404
-                except Exception as load_err:
-                    logger.error(f"Error within load_user_context for registration_id {registration_id_str}: {load_err}", exc_info=True)
-                    return {"error": "Failed to load user context"}, 500
-            else:
-                logger.warning(f"Registration ID is missing in user details for user: {user['id']}")
-                return {"error": "User found but registration_id missing in details"}, 404
+        user_data = await db_client.query(
+            table_name="users",
+            select_fields="id, details",
+            filters={"details->>registration_id": registration_id},
+            single=True
+        )
+        
+        if user_data:
+            return {
+                "user_id": user_data["id"],
+                "registration_id": registration_id,
+                "status": "found",
+                "details": user_data["details"]
+            }
         else:
-            logger.info(f"No user found for registration_id: {user_id}")
-            return {"error": "User not found or registration_id missing"}, 404
+            raise HTTPException(status_code=404, detail="User not found")
+            
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error querying Supabase or general error in /user/{user_id} endpoint: {e}", exc_info=True)
-        return {"error": "Internal server error"}, 500
+        logger.error(f"Error fetching user: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

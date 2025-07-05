@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
 
 class CustomerBooking(BaseModel):
     confirmation_number: str
@@ -7,7 +8,7 @@ class CustomerBooking(BaseModel):
 class UserDetails(BaseModel):
     user_id: str
     registration_id: str
-    organization_id: str | None = None
+    organization_id: Optional[str] = None
 
 class BusinessDetails(BaseModel):
     companyName: str
@@ -18,12 +19,18 @@ class BusinessDetails(BaseModel):
     email: str
 
 class AirlineAgentContext(BaseModel):
-    confirmation_number: str | None = None
-    account_number: str | None = None
-    registration_id: str | None = None
-    user_id: str | None = None
-    business_details: BusinessDetails | None = None
-    organization_id: str | None = None
+    confirmation_number: Optional[str] = None
+    account_number: Optional[str] = None
+    registration_id: Optional[str] = None
+    user_id: Optional[str] = None
+    business_details: Optional[BusinessDetails] = None
+    organization_id: Optional[str] = None
+    
+    # Additional context fields for conference system
+    user_name: Optional[str] = None
+    email: Optional[str] = None
+    is_conference_attendee: bool = False
+    conference_name: Optional[str] = None
 
     class Config:
-        extra = "forbid"  # Prevent extra fields
+        extra = "allow"  # Allow extra fields for flexibility
